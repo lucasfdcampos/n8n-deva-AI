@@ -1,0 +1,317 @@
+{
+  "name": "Deva IA v1.1 - Hybrid",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1840, 112],
+      "id": "83e489d4-4802-4774-9371-7a70c1df7b3d",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"pergunta\": \"Posso fazer uma retirada de 10 mil reais em janeiro de 2026?\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1648, 112],
+      "id": "88a80a72-8a8e-4d12-9766-aaf36c2c7441",
+      "name": "Set Pergunta"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pergunta = $input.first().json.pergunta;\n\nconst promptClassificador = `Você é um Classificador de Intenção. Analise a pergunta e retorne APENAS um JSON válido (sem markdown) com:\n{\n  \"ano\": 2025,\n  \"tipo_analise\": \"financeira\",\n  \"pergunta_original\": \"texto\"\n}\n\nREGRAS:\n- ano: Se mencionar 'ano passado' ou '2025' = 2025. Se 'agora', 'futuro' ou '2026' = 2026\n- tipo_analise: 'financeira', 'vendas' ou 'operacional'\n\nPERGUNTA: ${pergunta}`;\n\nreturn {\n  json: {\n    contents: [{\n      role: \"user\",\n      parts: [{\n        text: promptClassificador\n      }]\n    }],\n    generationConfig: {\n      temperature: 0.1,\n      maxOutputTokens: 300\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1440, 112],
+      "id": "b879959e-39aa-4943-8819-b0f0cb28d1f0",
+      "name": "Montar Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json.content.parts[0].text\nlet jsonLimpo = resposta.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\nconst classificacao = JSON.parse(jsonLimpo);\nconst targetFile = `Controle - ${classificacao.ano}`;\n\nreturn {\n  json: {\n    ano: classificacao.ano,\n    tipo_analise: classificacao.tipo_analise,\n    pergunta_original: classificacao.pergunta_original,\n    target_worksheet: targetFile\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-784, 112],
+      "id": "0c4d569f-2443-4662-b076-62630aa3ee16",
+      "name": "Parse Classificação"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "folder",
+        "operation": "list",
+        "path": "/Deva Cardans/Planilhas",
+        "returnAll": true,
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [-512, 112],
+      "id": "8b69c05d-6528-40da-90cf-d75734a7d87c",
+      "name": "Dropbox List",
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "qVPhBI8XRDBzRuy5",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "filter-ano",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "={{ $('Parse Classificação').item.json.target_worksheet }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-272, 112],
+      "id": "db86bd4c-efd8-46c8-af84-581dd2ca5770",
+      "name": "Filter Ano"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "download",
+        "path": "={{ $json.pathDisplay }}"
+      },
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [-32, 112],
+      "id": "d2643e2a-ccfa-4d6d-a389-59e122e442c8",
+      "name": "Dropbox Download",
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "qVPhBI8XRDBzRuy5",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "sheetName": "Dashboard",
+          "headerRow": false
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [208, 0],
+      "id": "extract-dashboard",
+      "name": "Extract Dashboard"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limpa e estrutura dados do Dashboard\nconst items = $input.all();\nconst resultado = {\n  caixa: null,\n  janeiro: {\n    receber: null,\n    recebido: null,\n    pagar: null,\n    pago: null\n  },\n  saldo: {},\n  caixaProjetado: {}\n};\n\n// Busca valores específicos nas linhas\nfor (let i = 0; i < items.length; i++) {\n  const json = items[i].json;\n  const keys = Object.keys(json);\n  \n  // Linha 5 col 1: 'Caixa' -> valor na linha 7 col 1\n  if (json[keys[1]] === 'Caixa') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[1]] === 'number') {\n        resultado.caixa = valorItem[keys[1]];\n      }\n    }\n  }\n  \n  // Linha 5 col 9: 'Receber (Janeiro)' -> valor na linha 7 col 9\n  if (json[keys[9]] === 'Receber (Janeiro)') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[9]] === 'number') {\n        resultado.janeiro.receber = valorItem[keys[9]];\n      }\n    }\n  }\n  \n  // Linha 12 col 9: 'Recebido (Janeiro)' -> valor na linha 14 col 9\n  if (json[keys[9]] === 'Recebido (Janeiro)') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[9]] === 'number') {\n        resultado.janeiro.recebido = valorItem[keys[9]];\n      }\n    }\n  }\n  \n  // Linha 19 col 9: 'Pagar (Janeiro)' -> valor na linha 21 col 9\n  if (json[keys[9]] === 'Pagar (Janeiro)') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[9]] === 'number') {\n        resultado.janeiro.pagar = valorItem[keys[9]];\n      }\n    }\n  }\n  \n  // Linha 26 col 9: 'Pago (Janeiro)' -> valor na linha 28 col 9\n  if (json[keys[9]] === 'Pago (Janeiro)') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[9]] === 'number') {\n        resultado.janeiro.pago = valorItem[keys[9]];\n      }\n    }\n  }\n  \n  // Linha 33 col 9: 'Caixa Projetado (Janeiro)' -> valor na linha 35 col 9\n  if (json[keys[9]] === 'Caixa Projetado (Janeiro)') {\n    if (i + 2 < items.length) {\n      const valorItem = items[i + 2].json;\n      if (typeof valorItem[keys[9]] === 'number') {\n        resultado.caixaProjetado.Janeiro = valorItem[keys[9]];\n      }\n    }\n  }\n  \n  // Linha 57: meses (Janeiro na col 4)\n  if (json[keys[4]] === 'Janeiro' && i + 1 < items.length) {\n    const entradaItem = items[i + 1].json;\n    const saidaItem = items[i + 2].json;\n    \n    // Calcula saldo = entrada - saída\n    const entrada = entradaItem[keys[4]] || 0;\n    const saida = saidaItem[keys[4]] || 0;\n    resultado.saldo.Janeiro = entrada - saida;\n  }\n}\n\nreturn { json: resultado };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 0],
+      "id": "clean-dashboard",
+      "name": "Clean Dashboard"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "sheetName": "Fluxo de Caixa - Mensal",
+          "headerRow": false
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [208, 208],
+      "id": "extract-fluxo",
+      "name": "Extract Fluxo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limpa e estrutura dados do Fluxo de Caixa\nconst items = $input.all();\nconst mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio'];\nconst mesAtual = new Date().getMonth();\nconst nomeDoMesAtual = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', \n                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][mesAtual];\n\nconst resultado = {\n  realizado: {\n    saldoInicial: {},\n    entradas: {},\n    saidas: {},\n    caixaFinal: {}\n  },\n  emAndamento: {\n    entradasAReceber: {},\n    saidasAPagar: {},\n    movimentacaoTotal: {},\n    saldo: {}\n  }\n};\n\nitems.forEach((item, idx) => {\n  const json = item.json;\n  const keys = Object.keys(json);\n  const primeiraCol = json[keys[0]];\n  \n  // Saldo Inicial (linha 3, apenas mês atual)\n  if (idx === 3 && primeiraCol && primeiraCol.toString().includes('Saldo inicial')) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && mes === nomeDoMesAtual) {\n        resultado.realizado.saldoInicial[mes] = json[col];\n      }\n    });\n  }\n  \n  // Entradas (linha 4)\n  if (idx === 4) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && json[col] !== 0) {\n        resultado.realizado.entradas[mes] = { total: json[col] };\n      }\n    });\n  }\n  \n  // Saídas (linha 8)\n  if (idx === 8) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && json[col] !== 0) {\n        resultado.realizado.saidas[mes] = { total: json[col] };\n      }\n    });\n  }\n  \n  // Caixa Final (linha 19, apenas mês atual)\n  if (idx === 19 && primeiraCol && primeiraCol.toString().includes('Caixa final')) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && mes === nomeDoMesAtual) {\n        resultado.realizado.caixaFinal[mes] = json[col];\n      }\n    });\n  }\n  \n  // Entradas a Receber (linha 22)\n  if (idx === 22) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && json[col] !== 0) {\n        resultado.emAndamento.entradasAReceber[mes] = { total: json[col] };\n      }\n    });\n  }\n  \n  // Saídas a Pagar (linha 26)\n  if (idx === 26) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && json[col] !== 0) {\n        resultado.emAndamento.saidasAPagar[mes] = { total: json[col] };\n      }\n    });\n  }\n  \n  // Movimentação Total (linha 36)\n  if (idx === 36) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col]) {\n        resultado.emAndamento.movimentacaoTotal[mes] = json[col];\n      }\n    });\n  }\n  \n  // Saldo (linha 37)\n  if (idx === 37) {\n    mesesNomes.forEach((mes, i) => {\n      const col = keys[i + 1];\n      if (json[col] && json[col] !== 0) {\n        resultado.emAndamento.saldo[mes] = json[col];\n      }\n    });\n  }\n});\n\nreturn { json: resultado };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 208],
+      "id": "clean-fluxo",
+      "name": "Clean Fluxo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combina dados do Dashboard e Fluxo de Caixa\nconst items = $input.all();\nconst dadosCombinados = {\n  dashboard: {},\n  fluxoCaixa: {},\n  resumoFinanceiro: {}\n};\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  if (data.caixa !== undefined) {\n    dadosCombinados.dashboard = data;\n    dadosCombinados.resumoFinanceiro.caixaAtual = data.caixa;\n    if (data.janeiro) {\n      dadosCombinados.resumoFinanceiro.receberJaneiro = data.janeiro.receber;\n      dadosCombinados.resumoFinanceiro.pagarJaneiro = data.janeiro.pagar;\n      dadosCombinados.resumoFinanceiro.saldoJaneiro = data.saldo?.Janeiro;\n    }\n  } else if (data.realizado !== undefined) {\n    dadosCombinados.fluxoCaixa = data;\n    if (data.realizado.saldoInicial?.Janeiro) {\n      dadosCombinados.resumoFinanceiro.saldoInicialMes = data.realizado.saldoInicial.Janeiro;\n    }\n    if (data.emAndamento) {\n      dadosCombinados.resumoFinanceiro.projecaoProximosMeses = data.emAndamento.movimentacaoTotal;\n    }\n  }\n});\n\nreturn { json: dadosCombinados };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [688, 112],
+      "id": "combinar",
+      "name": "Combinar Dados"
+    },
+    {
+      "parameters": {
+        "jsCode": "const perguntaOriginal = $node['Parse Classificação'].json.pergunta_original;\nconst dados = $input.first().json;\n\nlet contextoFinanceiro = \"📊 DADOS FINANCEIROS CONSOLIDADOS\\n\\n\";\n\ncontextoFinanceiro += \"=== DASHBOARD (Visão Atual) ===\\n\";\nif (dados.dashboard.caixa) {\n  contextoFinanceiro += `💰 Caixa Atual: R$ ${dados.dashboard.caixa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\nif (dados.dashboard.janeiro) {\n  contextoFinanceiro += `\\n📥 JANEIRO - Recebimentos:\\n`;\n  contextoFinanceiro += `   A Receber: R$ ${(dados.dashboard.janeiro.receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Recebido: R$ ${(dados.dashboard.janeiro.recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `\\n📤 JANEIRO - Pagamentos:\\n`;\n  contextoFinanceiro += `   A Pagar: R$ ${(dados.dashboard.janeiro.pagar || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Pago: R$ ${(dados.dashboard.janeiro.pago || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\n\ncontextoFinanceiro += \"\\n=== FLUXO DE CAIXA (Histórico + Projeção) ===\\n\";\nif (dados.fluxoCaixa.realizado) {\n  const real = dados.fluxoCaixa.realizado;\n  if (real.saldoInicial?.Janeiro) {\n    contextoFinanceiro += `🏁 Saldo Inicial Janeiro: R$ ${real.saldoInicial.Janeiro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.entradas?.Janeiro) {\n    contextoFinanceiro += `✅ Entradas Realizadas Jan: R$ ${real.entradas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.saidas?.Janeiro) {\n    contextoFinanceiro += `❌ Saídas Realizadas Jan: R$ ${real.saidas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n}\n\nif (dados.fluxoCaixa.emAndamento) {\n  const andamento = dados.fluxoCaixa.emAndamento;\n  contextoFinanceiro += \"\\n📈 PROJEÇÕES (Próximos Meses):\\n\";\n  \n  ['Janeiro', 'Fevereiro', 'Março'].forEach(mes => {\n    if (andamento.movimentacaoTotal?.[mes]) {\n      const mov = andamento.movimentacaoTotal[mes];\n      const simbolo = mov >= 0 ? '➕' : '➖';\n      contextoFinanceiro += `   ${simbolo} ${mes}: R$ ${mov.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n    }\n  });\n}\n\nconst promptCEO = `Você é o CEO da Deva Cardans. Você tem acesso aos dados financeiros consolidados.\n\n🔴 REGRA DE OURO: O saldo em caixa NUNCA pode ficar abaixo de R$ 60.000,00 (margem de segurança obrigatória).\n\nTAREFA: Analise os dados e responda a pergunta de forma estratégica e objetiva.\n\nSe a pergunta envolver compras/retiradas:\n1. Verifique o saldo atual\n2. Simule o impacto (Caixa Atual - Valor Solicitado - Compromissos Pendentes)\n3. Compare com a margem de segurança de R$ 60.000,00\n4. Se o saldo final ficar abaixo de R$ 60k, ALERTE o risco e sugira alternativas\n5. Considere as projeções dos próximos meses\n6. Sempre mencione explicitamente a margem de segurança de R$ 60k na resposta\n\nRESPONDA EM PORTUGUÊS, de forma clara e direta.\n\n${contextoFinanceiro}\n\nPERGUNTA: ${perguntaOriginal}\n\nLEMBRETE: Sempre considere e mencione a margem de segurança de R$ 60.000,00 na sua análise.`;\n\nreturn {\n  json: {\n    contents: [\n      {\n        role: \"user\",\n        parts: [{ text: promptCEO }]\n      }\n    ],\n    generationConfig: {\n      temperature: 0.3,\n      maxOutputTokens: 2000\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [928, 112],
+      "id": "preparar-prompt",
+      "name": "Preparar Prompt CEO"
+    },
+    {
+      "parameters": {
+        "jsCode": "const respostaCEO = $input.first().json.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    resposta: respostaCEO,\n    status: \"success\",\n    timestamp: new Date().toISOString(),\n    versao: \"v1.1 - Hybrid Approach\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1456, 112],
+      "id": "resultado",
+      "name": "Resultado Final"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.contents[0].parts[0].text }}"
+            }
+          ]
+        },
+        "jsonOutput": "={{ false }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [-1232, 112],
+      "id": "gemini-classifier",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wA8iw2nMxMPbhdEL",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.contents[0].parts[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [1168, 112],
+      "id": "gemini-ceo",
+      "name": "Message a model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wA8iw2nMxMPbhdEL",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Set Pergunta", "type": "main", "index": 0}]]
+    },
+    "Set Pergunta": {
+      "main": [[{"node": "Montar Payload", "type": "main", "index": 0}]]
+    },
+    "Montar Payload": {
+      "main": [[{"node": "Message a model", "type": "main", "index": 0}]]
+    },
+    "Parse Classificação": {
+      "main": [[{"node": "Dropbox List", "type": "main", "index": 0}]]
+    },
+    "Dropbox List": {
+      "main": [[{"node": "Filter Ano", "type": "main", "index": 0}]]
+    },
+    "Filter Ano": {
+      "main": [[{"node": "Dropbox Download", "type": "main", "index": 0}]]
+    },
+    "Dropbox Download": {
+      "main": [[
+        {"node": "Extract Dashboard", "type": "main", "index": 0},
+        {"node": "Extract Fluxo", "type": "main", "index": 0}
+      ]]
+    },
+    "Extract Dashboard": {
+      "main": [[{"node": "Clean Dashboard", "type": "main", "index": 0}]]
+    },
+    "Clean Dashboard": {
+      "main": [[{"node": "Combinar Dados", "type": "main", "index": 0}]]
+    },
+    "Extract Fluxo": {
+      "main": [[{"node": "Clean Fluxo", "type": "main", "index": 0}]]
+    },
+    "Clean Fluxo": {
+      "main": [[{"node": "Combinar Dados", "type": "main", "index": 0}]]
+    },
+    "Combinar Dados": {
+      "main": [[{"node": "Preparar Prompt CEO", "type": "main", "index": 0}]]
+    },
+    "Preparar Prompt CEO": {
+      "main": [[{"node": "Message a model1", "type": "main", "index": 0}]]
+    },
+    "Message a model": {
+      "main": [[{"node": "Parse Classificação", "type": "main", "index": 0}]]
+    },
+    "Message a model1": {
+      "main": [[{"node": "Resultado Final", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "v1.1-hybrid-approach",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "031c656caa488c3f47e6c2152e161ba7b466ddd7ccfc5fdd243352eed315709c"
+  },
+  "tags": [
+    {
+      "name": "v1.1",
+      "id": "version-1-1"
+    }
+  ]
+}

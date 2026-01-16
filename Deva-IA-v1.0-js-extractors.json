@@ -1,0 +1,431 @@
+{
+  "name": "Deva IA v1.0",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1840,
+        112
+      ],
+      "id": "83e489d4-4802-4774-9371-7a70c1df7b3d",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"pergunta\": \"Posso fazer uma retirada de 10 mil reais em janeiro de 2026?\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1648,
+        112
+      ],
+      "id": "88a80a72-8a8e-4d12-9766-aaf36c2c7441",
+      "name": "Set Pergunta"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pergunta = $input.first().json.pergunta;\n\nconst promptClassificador = `Você é um Classificador de Intenção. Analise a pergunta e retorne APENAS um JSON válido (sem markdown) com:\n{\n  \"ano\": 2025,\n  \"tipo_analise\": \"financeira\",\n  \"pergunta_original\": \"texto\"\n}\n\nREGRAS:\n- ano: Se mencionar 'ano passado' ou '2025' = 2025. Se 'agora', 'futuro' ou '2026' = 2026\n- tipo_analise: 'financeira', 'vendas' ou 'operacional'\n\nPERGUNTA: ${pergunta}`;\n\nreturn {\n  json: {\n    contents: [{\n      role: \"user\",\n      parts: [{\n        text: promptClassificador\n      }]\n    }],\n    generationConfig: {\n      temperature: 0.1,\n      maxOutputTokens: 300\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1440,
+        112
+      ],
+      "id": "b879959e-39aa-4943-8819-b0f0cb28d1f0",
+      "name": "Montar Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o JSON da resposta do Gemini\nconst resposta = $input.first().json.content.parts[0].text\n// Remove markdown se houver\nlet jsonLimpo = resposta.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\n\n// Parse do JSON\nconst classificacao = JSON.parse(jsonLimpo);\n\n// Monta o nome do arquivo alvo\nconst targetFile = `Controle - ${classificacao.ano}`;\n\nreturn {\n  json: {\n    ano: classificacao.ano,\n    tipo_analise: classificacao.tipo_analise,\n    pergunta_original: classificacao.pergunta_original,\n    target_worksheet: targetFile\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        112
+      ],
+      "id": "0c4d569f-2443-4662-b076-62630aa3ee16",
+      "name": "Parse Classificação"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "folder",
+        "operation": "list",
+        "path": "/Deva Cardans/Planilhas",
+        "returnAll": true,
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        112
+      ],
+      "id": "8b69c05d-6528-40da-90cf-d75734a7d87c",
+      "name": "Dropbox List",
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "qVPhBI8XRDBzRuy5",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "filter-ano",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "={{ $('Parse Classificação').item.json.target_worksheet }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        112
+      ],
+      "id": "db86bd4c-efd8-46c8-af84-581dd2ca5770",
+      "name": "Filter Ano"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "download",
+        "path": "={{ $json.pathDisplay }}"
+      },
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        112
+      ],
+      "id": "d2643e2a-ccfa-4d6d-a389-59e122e442c8",
+      "name": "Dropbox Download",
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "qVPhBI8XRDBzRuy5",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n_dashboard_reader.js - Extrator customizado do Dashboard\nconst XLSX = require('xlsx');\n\nconst binaryData = $input.first().binary.data;\nconst buffer = Buffer.from(binaryData.data, binaryData.encoding || 'base64');\nconst workbook = XLSX.read(buffer, { type: 'buffer' });\nconst sheetName = 'Dashboard';\nconst worksheet = workbook.Sheets[sheetName];\n\nif (!worksheet) {\n  throw new Error(`Sheet \"${sheetName}\" não encontrada`);\n}\n\nconst data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });\n\nfunction findValue(searchText, data) {\n  for (let row = 0; row < data.length; row++) {\n    for (let col = 0; col < data[row].length; col++) {\n      const cellValue = data[row][col];\n      if (cellValue && cellValue.toString().includes(searchText)) {\n        return { row, col, value: cellValue };\n      }\n    }\n  }\n  return null;\n}\n\nconst resultado = {\n  caixa: null,\n  caixaProjetado: {},\n  saldo: {},\n  janeiro: {\n    receber: null,\n    recebido: null,\n    pagar: null,\n    pago: null,\n    despesas: {\n      fixas: null,\n      variaveis: null,\n      impostos: null\n    }\n  }\n};\n\nconst caixaCell = findValue('Caixa', data);\nif (caixaCell && caixaCell.row + 2 < data.length) {\n  resultado.caixa = data[caixaCell.row + 2][caixaCell.col];\n}\n\nconst receberJan = findValue('Receber (Janeiro)', data);\nif (receberJan && receberJan.row + 2 < data.length) {\n  resultado.janeiro.receber = data[receberJan.row + 2][receberJan.col];\n}\n\nconst recebidoJan = findValue('Recebido (Janeiro)', data);\nif (recebidoJan && recebidoJan.row + 2 < data.length) {\n  resultado.janeiro.recebido = data[recebidoJan.row + 2][recebidoJan.col];\n}\n\nconst pagarJan = findValue('Pagar (Janeiro)', data);\nif (pagarJan && pagarJan.row + 2 < data.length) {\n  resultado.janeiro.pagar = data[pagarJan.row + 2][pagarJan.col];\n}\n\nconst pagoJan = findValue('Pago (Janeiro)', data);\nif (pagoJan && pagoJan.row + 2 < data.length) {\n  resultado.janeiro.pago = data[pagoJan.row + 2][pagoJan.col];\n}\n\nconst meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio'];\nmeses.forEach(mes => {\n  const saldoText = `Saldo (${mes})`;\n  const found = findValue(saldoText, data);\n  if (found && found.row + 2 < data.length) {\n    const valor = data[found.row + 2][found.col];\n    if (valor !== null && valor !== undefined) {\n      resultado.saldo[mes] = valor;\n    }\n  }\n});\n\nreturn { json: resultado };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "0c1a5518-3f40-4141-8dcc-ebe2ccce03d6",
+      "name": "JS Dashboard Reader"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n_fluxo_caixa_reader.js - Extrator customizado do Fluxo de Caixa\nconst XLSX = require('xlsx');\n\nconst binaryData = $input.first().binary.data;\nconst buffer = Buffer.from(binaryData.data, binaryData.encoding || 'base64');\nconst workbook = XLSX.read(buffer, { type: 'buffer' });\nconst sheetName = 'Fluxo de Caixa - Mensal';\nconst worksheet = workbook.Sheets[sheetName];\n\nif (!worksheet) {\n  throw new Error(`Sheet \"${sheetName}\" não encontrada`);\n}\n\nconst data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });\nconst mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', \n                    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];\n\nconst mesAtual = new Date().getMonth();\nconst nomeDoMesAtual = mesesNomes[mesAtual];\n\nconst resultado = {\n  realizado: {\n    saldoInicial: {},\n    entradas: {},\n    saidas: {},\n    caixaFinal: {}\n  },\n  emAndamento: {\n    entradasAReceber: {},\n    saidasAPagar: {},\n    movimentacaoTotal: {},\n    saldo: {}\n  }\n};\n\nconst monthColumns = Array.from({length: 12}, (_, i) => i + 1);\n\n// Saldo Inicial - apenas mês atual\nif (data[3]) {\n  monthColumns.forEach((col, index) => {\n    const value = data[3][col];\n    if (value !== null && value !== undefined && mesesNomes[index] === nomeDoMesAtual) {\n      resultado.realizado.saldoInicial[mesesNomes[index]] = value;\n    }\n  });\n}\n\n// Entradas (linha 4)\nif (data[4]) {\n  monthColumns.forEach((col, index) => {\n    const value = data[4][col];\n    if (value !== null && value !== undefined && value !== 0) {\n      resultado.realizado.entradas[mesesNomes[index]] = { total: value };\n    }\n  });\n}\n\n// Saídas (linha 8)\nif (data[8]) {\n  monthColumns.forEach((col, index) => {\n    const value = data[8][col];\n    if (value !== null && value !== undefined && value !== 0) {\n      resultado.realizado.saidas[mesesNomes[index]] = { total: value };\n    }\n  });\n}\n\n// Caixa Final - apenas mês atual\nif (data[19]) {\n  monthColumns.forEach((col, index) => {\n    const value = data[19][col];\n    if (value !== null && value !== undefined && mesesNomes[index] === nomeDoMesAtual) {\n      resultado.realizado.caixaFinal[mesesNomes[index]] = value;\n    }\n  });\n}\n\n// Entradas a Receber (linha 22)\nif (data[22]) {\n  monthColumns.slice(0, 5).forEach((col, index) => {\n    const value = data[22][col];\n    if (value !== null && value !== undefined && value !== 0) {\n      resultado.emAndamento.entradasAReceber[mesesNomes[index]] = { total: value };\n    }\n  });\n}\n\n// Saídas a Pagar (linha 26)\nif (data[26]) {\n  monthColumns.slice(0, 5).forEach((col, index) => {\n    const value = data[26][col];\n    if (value !== null && value !== undefined && value !== 0) {\n      resultado.emAndamento.saidasAPagar[mesesNomes[index]] = { total: value };\n    }\n  });\n}\n\n// Movimentação Total (linha 36)\nif (data[36]) {\n  monthColumns.slice(0, 5).forEach((col, index) => {\n    const value = data[36][col];\n    if (value !== null && value !== undefined) {\n      resultado.emAndamento.movimentacaoTotal[mesesNomes[index]] = value;\n    }\n  });\n}\n\n// Saldo (linha 37)\nif (data[37]) {\n  monthColumns.slice(0, 5).forEach((col, index) => {\n    const value = data[37][col];\n    if (value !== null && value !== undefined && value !== 0) {\n      resultado.emAndamento.saldo[mesesNomes[index]] = value;\n    }\n  });\n}\n\nreturn { json: resultado };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        208
+      ],
+      "id": "9472f9e0-04f3-40d5-ac92-481f118c49d6",
+      "name": "JS Fluxo Caixa Reader"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combina dados do Dashboard e Fluxo de Caixa\nconst items = $input.all();\n\n// Inicializa objeto combinado\nconst dadosCombinados = {\n  dashboard: {},\n  fluxoCaixa: {},\n  resumoFinanceiro: {}\n};\n\n// Separa os dados de cada extrator\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Identifica origem dos dados\n  if (data.caixa !== undefined) {\n    // Dados do Dashboard\n    dadosCombinados.dashboard = data;\n    \n    // Adiciona ao resumo\n    dadosCombinados.resumoFinanceiro.caixaAtual = data.caixa;\n    if (data.janeiro) {\n      dadosCombinados.resumoFinanceiro.receberJaneiro = data.janeiro.receber;\n      dadosCombinados.resumoFinanceiro.pagarJaneiro = data.janeiro.pagar;\n      dadosCombinados.resumoFinanceiro.saldoJaneiro = data.saldo?.Janeiro;\n    }\n  } else if (data.realizado !== undefined) {\n    // Dados do Fluxo de Caixa\n    dadosCombinados.fluxoCaixa = data;\n    \n    // Adiciona ao resumo\n    if (data.realizado.saldoInicial?.Janeiro) {\n      dadosCombinados.resumoFinanceiro.saldoInicialMes = data.realizado.saldoInicial.Janeiro;\n    }\n    if (data.emAndamento) {\n      dadosCombinados.resumoFinanceiro.projecaoProximosMeses = data.emAndamento.movimentacaoTotal;\n    }\n  }\n});\n\nreturn { json: dadosCombinados };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        112
+      ],
+      "id": "7611d9bb-a66d-4796-8edc-eda4730d6f98",
+      "name": "Combinar Dados"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega a pergunta original\nconst perguntaOriginal = $node['Parse Classificação'].json.pergunta_original;\n\n// Pega os dados combinados\nconst dados = $input.first().json;\n\n// Monta contexto financeiro detalhado\nlet contextoFinanceiro = \"📊 DADOS FINANCEIROS CONSOLIDADOS\\n\\n\";\n\n// Dashboard\ncontextoFinanceiro += \"=== DASHBOARD (Visão Atual) ===\\n\";\nif (dados.dashboard.caixa) {\n  contextoFinanceiro += `💰 Caixa Atual: R$ ${dados.dashboard.caixa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\nif (dados.dashboard.janeiro) {\n  contextoFinanceiro += `\\n📥 JANEIRO - Recebimentos:\\n`;\n  contextoFinanceiro += `   A Receber: R$ ${(dados.dashboard.janeiro.receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Recebido: R$ ${(dados.dashboard.janeiro.recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `\\n📤 JANEIRO - Pagamentos:\\n`;\n  contextoFinanceiro += `   A Pagar: R$ ${(dados.dashboard.janeiro.pagar || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Pago: R$ ${(dados.dashboard.janeiro.pago || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\n\n// Fluxo de Caixa\ncontextoFinanceiro += \"\\n=== FLUXO DE CAIXA (Histórico + Projeção) ===\\n\";\nif (dados.fluxoCaixa.realizado) {\n  const real = dados.fluxoCaixa.realizado;\n  if (real.saldoInicial?.Janeiro) {\n    contextoFinanceiro += `🏁 Saldo Inicial Janeiro: R$ ${real.saldoInicial.Janeiro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.entradas?.Janeiro) {\n    contextoFinanceiro += `✅ Entradas Realizadas Jan: R$ ${real.entradas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.saidas?.Janeiro) {\n    contextoFinanceiro += `❌ Saídas Realizadas Jan: R$ ${real.saidas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n}\n\nif (dados.fluxoCaixa.emAndamento) {\n  const andamento = dados.fluxoCaixa.emAndamento;\n  contextoFinanceiro += \"\\n📈 PROJEÇÕES (Próximos Meses):\\n\";\n  \n  ['Janeiro', 'Fevereiro', 'Março'].forEach(mes => {\n    if (andamento.movimentacaoTotal?.[mes]) {\n      const mov = andamento.movimentacaoTotal[mes];\n      const simbolo = mov >= 0 ? '➕' : '➖';\n      contextoFinanceiro += `   ${simbolo} ${mes}: R$ ${mov.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n    }\n  });\n}\n\nconst promptCEO = `Você é o CEO da Deva Cardans. Você tem acesso aos dados financeiros consolidados.\n\n🔴 REGRA DE OURO: O saldo em caixa NUNCA pode ficar abaixo de R$ 60.000,00.\n\nTAREFA: Analise os dados e responda a pergunta de forma estratégica e objetiva.\n\nSe a pergunta envolver compras/retiradas:\n1. Verifique o saldo atual\n2. Simule o impacto (Caixa - Valor - Compromissos Pendentes)\n3. Se ficar abaixo de R$ 60k, ALERTE o risco\n4. Sugira alternativas se necessário\n5. Considere as projeções dos próximos meses\n\nRESPONDA EM PORTUGUÊS, de forma clara e direta.\n\n${contextoFinanceiro}\n\nPERGUNTA: ${perguntaOriginal}`;\n\nreturn {\n  json: {\n    contents: [\n      {\n        role: \"user\",\n        parts: [{ text: promptCEO }]\n      }\n    ],\n    generationConfig: {\n      temperature: 0.3,\n      maxOutputTokens: 2000\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        112
+      ],
+      "id": "c412fc8e-8537-415f-9573-3d4e73c50d60",
+      "name": "Preparar Prompt CEO"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai resposta final\nconst respostaCEO = $input.first().json.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    resposta: respostaCEO,\n    status: \"success\",\n    timestamp: new Date().toISOString(),\n    versao: \"v1.0 - JS Extractors\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        112
+      ],
+      "id": "2a3ec989-cf1e-4709-a8b8-cf9b9e2f92e6",
+      "name": "Resultado Final"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.contents[0].parts[0].text }}"
+            }
+          ]
+        },
+        "jsonOutput": "={{ false }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        112
+      ],
+      "id": "a2bb975d-7f0d-41b6-9625-5bf9c9a74e2d",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wA8iw2nMxMPbhdEL",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.contents[0].parts[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        896,
+        112
+      ],
+      "id": "717c229b-c570-42a4-9d45-e7b1899f396c",
+      "name": "Message a model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wA8iw2nMxMPbhdEL",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Pergunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Pergunta": {
+      "main": [
+        [
+          {
+            "node": "Montar Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Payload": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classificação": {
+      "main": [
+        [
+          {
+            "node": "Dropbox List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dropbox List": {
+      "main": [
+        [
+          {
+            "node": "Filter Ano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Ano": {
+      "main": [
+        [
+          {
+            "node": "Dropbox Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dropbox Download": {
+      "main": [
+        [
+          {
+            "node": "JS Dashboard Reader",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "JS Fluxo Caixa Reader",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Dashboard Reader": {
+      "main": [
+        [
+          {
+            "node": "Combinar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Fluxo Caixa Reader": {
+      "main": [
+        [
+          {
+            "node": "Combinar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar Dados": {
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt CEO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Prompt CEO": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Parse Classificação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Resultado Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "v1.0-js-extractors",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "031c656caa488c3f47e6c2152e161ba7b466ddd7ccfc5fdd243352eed315709c"
+  },
+  "tags": [
+    {
+      "name": "v1.0",
+      "id": "version-1"
+    }
+  ]
+}

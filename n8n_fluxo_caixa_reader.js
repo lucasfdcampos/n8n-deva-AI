@@ -97,11 +97,16 @@ if (data[21]) {
 
 // ========== REALIZADO ==========
 
-// Saldo Inicial (linha 3)
+// Obtém o mês atual
+const mesAtual = new Date().getMonth(); // 0 = Janeiro, 1 = Fevereiro, etc.
+const nomeDoMesAtual = mesesNomes[mesAtual];
+
+// Saldo Inicial (linha 3) - apenas do mês atual
 if (data[3]) {
   monthColumnsRealizado.forEach((col, index) => {
     const value = data[3][col];
-    if (value !== null && value !== undefined) {
+    // Só inclui se for o mês atual
+    if (value !== null && value !== undefined && mesesNomes[index] === nomeDoMesAtual) {
       resultado.realizado.saldoInicial[mesesNomes[index]] = value;
     }
   });

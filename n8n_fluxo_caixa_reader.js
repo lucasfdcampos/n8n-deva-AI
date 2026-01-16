@@ -176,11 +176,12 @@ if (data[18]) {
   });
 }
 
-// Caixa Final (linha 19)
+// Caixa Final (linha 19) - apenas do mês atual
 if (data[19]) {
   monthColumnsRealizado.forEach((col, index) => {
     const value = data[19][col];
-    if (value !== null && value !== undefined) {
+    // Só inclui se for o mês atual
+    if (value !== null && value !== undefined && mesesNomes[index] === nomeDoMesAtual) {
       resultado.realizado.caixaFinal[mesesNomes[index]] = value;
     }
   });

@@ -1,0 +1,33 @@
+services:
+  n8n:
+    build: .
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    env_file:
+      - .env
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=lucas
+      - N8N_BASIC_AUTH_PASSWORD=@D!464DSvg@9DbE
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n_workflows:/root/.n8n/workflows
+    restart: unless-stopped
+    networks:
+      - n8n_network
+
+volumes:
+  n8n_data:
+    driver: local
+  n8n_workflows:
+    driver: local
+
+networks:
+  n8n_network:
+    driver: bridge

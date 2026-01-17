@@ -5,7 +5,10 @@
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-1840, 112],
+      "position": [
+        -1840,
+        112
+      ],
       "id": "83e489d4-4802-4774-9371-7a70c1df7b3d",
       "name": "Manual Trigger"
     },
@@ -17,27 +20,36 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1648, 112],
+      "position": [
+        -1648,
+        112
+      ],
       "id": "88a80a72-8a8e-4d12-9766-aaf36c2c7441",
       "name": "Set Pergunta"
     },
     {
       "parameters": {
-        "jsCode": "const pergunta = $input.first().json.pergunta;\n\nconst promptClassificador = `Você é um Classificador de Intenção. Analise a pergunta e retorne APENAS um JSON válido (sem markdown) com:\n{\n  \"ano\": 2025,\n  \"tipo_analise\": \"financeira\",\n  \"pergunta_original\": \"texto\"\n}\n\nREGRAS:\n- ano: Se mencionar 'ano passado' ou '2025' = 2025. Se 'agora', 'futuro' ou '2026' = 2026\n- tipo_analise: 'financeira', 'vendas' ou 'operacional'\n\nPERGUNTA: ${pergunta}`;\n\nreturn {\n  json: {\n    contents: [{\n      role: \"user\",\n      parts: [{\n        text: promptClassificador\n      }]\n    }],\n    generationConfig: {\n      temperature: 0.1,\n      maxOutputTokens: 300\n    }\n  }\n};"
+        "jsCode": "const pergunta = $input.first().json.pergunta;\n\nconst promptClassificador = `Você é um Classificador de Intenção. Analise a pergunta e retorne APENAS um JSON válido (sem markdown) com:\n{\n  \"ano\": 2025,\n  \"tipo_analise\": \"financeira\",\n  \"eh_retirada\": false,\n  \"valor_retirada\": 0,\n  \"pergunta_original\": \"texto\"\n}\n\nREGRAS:\n- ano: Se mencionar 'ano passado' ou '2025' = 2025. Se 'agora', 'futuro' ou '2026' = 2026\n- tipo_analise: 'financeira', 'vendas' ou 'operacional'\n- eh_retirada: true se pergunta for sobre retirar/sacar/pegar dinheiro\n- valor_retirada: extraia o valor numérico se houver (ex: \"10 mil\" = 10000, \"50k\" = 50000)\n\nPERGUNTA: ${pergunta}`;\n\nreturn {\n  json: {\n    contents: [{\n      role: \"user\",\n      parts: [{\n        text: promptClassificador\n      }]\n    }],\n    generationConfig: {\n      temperature: 0.1,\n      maxOutputTokens: 300\n    }\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1440, 112],
+      "position": [
+        -1440,
+        112
+      ],
       "id": "b879959e-39aa-4943-8819-b0f0cb28d1f0",
       "name": "Montar Payload"
     },
     {
       "parameters": {
-        "jsCode": "const resposta = $input.first().json.content.parts[0].text\nlet jsonLimpo = resposta.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\nconst classificacao = JSON.parse(jsonLimpo);\nconst targetFile = `Controle - ${classificacao.ano}`;\n\nreturn {\n  json: {\n    ano: classificacao.ano,\n    tipo_analise: classificacao.tipo_analise,\n    pergunta_original: classificacao.pergunta_original,\n    target_worksheet: targetFile\n  }\n};"
+        "jsCode": "const resposta = $input.first().json.content.parts[0].text\nlet jsonLimpo = resposta.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\nconst classificacao = JSON.parse(jsonLimpo);\nconst targetFile = `Controle - ${classificacao.ano}`;\n\nreturn {\n  json: {\n    ano: classificacao.ano,\n    tipo_analise: classificacao.tipo_analise,\n    eh_retirada: classificacao.eh_retirada || false,\n    valor_retirada: classificacao.valor_retirada || 0,\n    pergunta_original: classificacao.pergunta_original,\n    target_worksheet: targetFile\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-784, 112],
+      "position": [
+        -784,
+        112
+      ],
       "id": "0c4d569f-2443-4662-b076-62630aa3ee16",
       "name": "Parse Classificação"
     },
@@ -52,7 +64,10 @@
       },
       "type": "n8n-nodes-base.dropbox",
       "typeVersion": 1,
-      "position": [-512, 112],
+      "position": [
+        -512,
+        112
+      ],
       "id": "8b69c05d-6528-40da-90cf-d75734a7d87c",
       "name": "Dropbox List",
       "credentials": {
@@ -88,7 +103,10 @@
       },
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [-272, 112],
+      "position": [
+        -272,
+        112
+      ],
       "id": "db86bd4c-efd8-46c8-af84-581dd2ca5770",
       "name": "Filter Ano"
     },
@@ -100,7 +118,10 @@
       },
       "type": "n8n-nodes-base.dropbox",
       "typeVersion": 1,
-      "position": [-32, 112],
+      "position": [
+        -32,
+        112
+      ],
       "id": "d2643e2a-ccfa-4d6d-a389-59e122e442c8",
       "name": "Dropbox Download",
       "credentials": {
@@ -120,7 +141,10 @@
       },
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
-      "position": [208, 0],
+      "position": [
+        208,
+        0
+      ],
       "id": "extract-dashboard",
       "name": "Extract Dashboard"
     },
@@ -130,7 +154,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [448, 0],
+      "position": [
+        448,
+        0
+      ],
       "id": "clean-dashboard",
       "name": "Clean Dashboard"
     },
@@ -144,7 +171,10 @@
       },
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
-      "position": [208, 208],
+      "position": [
+        208,
+        208
+      ],
       "id": "extract-fluxo",
       "name": "Extract Fluxo"
     },
@@ -154,7 +184,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [448, 208],
+      "position": [
+        448,
+        208
+      ],
       "id": "clean-fluxo",
       "name": "Clean Fluxo"
     },
@@ -164,17 +197,23 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [688, 112],
+      "position": [
+        688,
+        112
+      ],
       "id": "combinar",
       "name": "Combinar Dados"
     },
     {
       "parameters": {
-        "jsCode": "const perguntaOriginal = $node['Parse Classificação'].json.pergunta_original;\nconst dados = $input.first().json;\n\nlet contextoFinanceiro = \"📊 DADOS FINANCEIROS CONSOLIDADOS\\n\\n\";\n\ncontextoFinanceiro += \"=== DASHBOARD (Visão Atual) ===\\n\";\nif (dados.dashboard.caixa) {\n  contextoFinanceiro += `💰 Caixa Atual: R$ ${dados.dashboard.caixa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\nif (dados.dashboard.janeiro) {\n  contextoFinanceiro += `\\n📥 JANEIRO - Recebimentos:\\n`;\n  contextoFinanceiro += `   A Receber: R$ ${(dados.dashboard.janeiro.receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Recebido: R$ ${(dados.dashboard.janeiro.recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `\\n📤 JANEIRO - Pagamentos:\\n`;\n  contextoFinanceiro += `   A Pagar: R$ ${(dados.dashboard.janeiro.pagar || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Pago: R$ ${(dados.dashboard.janeiro.pago || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\n\ncontextoFinanceiro += \"\\n=== FLUXO DE CAIXA (Histórico + Projeção) ===\\n\";\nif (dados.fluxoCaixa.realizado) {\n  const real = dados.fluxoCaixa.realizado;\n  if (real.saldoInicial?.Janeiro) {\n    contextoFinanceiro += `🏁 Saldo Inicial Janeiro: R$ ${real.saldoInicial.Janeiro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.entradas?.Janeiro) {\n    contextoFinanceiro += `✅ Entradas Realizadas Jan: R$ ${real.entradas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.saidas?.Janeiro) {\n    contextoFinanceiro += `❌ Saídas Realizadas Jan: R$ ${real.saidas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n}\n\nif (dados.fluxoCaixa.emAndamento) {\n  const andamento = dados.fluxoCaixa.emAndamento;\n  contextoFinanceiro += \"\\n📈 PROJEÇÕES (Próximos Meses):\\n\";\n  \n  ['Janeiro', 'Fevereiro', 'Março'].forEach(mes => {\n    if (andamento.movimentacaoTotal?.[mes]) {\n      const mov = andamento.movimentacaoTotal[mes];\n      const simbolo = mov >= 0 ? '➕' : '➖';\n      contextoFinanceiro += `   ${simbolo} ${mes}: R$ ${mov.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n    }\n  });\n}\n\nconst promptCEO = `Você é o CEO da Deva Cardans. Você tem acesso aos dados financeiros consolidados.\n\n🔴 REGRA DE OURO: O saldo em caixa NUNCA pode ficar abaixo de R$ 60.000,00 (margem de segurança obrigatória).\n\nTAREFA: Analise os dados e responda a pergunta de forma estratégica e objetiva.\n\nSe a pergunta envolver compras/retiradas:\n1. Verifique o saldo atual\n2. Simule o impacto (Caixa Atual - Valor Solicitado - Compromissos Pendentes)\n3. Compare com a margem de segurança de R$ 60.000,00\n4. Se o saldo final ficar abaixo de R$ 60k, ALERTE o risco e sugira alternativas\n5. Considere as projeções dos próximos meses\n6. Sempre mencione explicitamente a margem de segurança de R$ 60k na resposta\n\nRESPONDA EM PORTUGUÊS, de forma clara e direta.\n\n${contextoFinanceiro}\n\nPERGUNTA: ${perguntaOriginal}\n\nLEMBRETE: Sempre considere e mencione a margem de segurança de R$ 60.000,00 na sua análise.`;\n\nreturn {\n  json: {\n    contents: [\n      {\n        role: \"user\",\n        parts: [{ text: promptCEO }]\n      }\n    ],\n    generationConfig: {\n      temperature: 0.3,\n      maxOutputTokens: 2000\n    }\n  }\n};"
+        "jsCode": "const classificacao = $node['Parse Classificação'].json;\nconst perguntaOriginal = classificacao.pergunta_original;\nconst ehRetirada = classificacao.eh_retirada;\nconst valorRetirada = classificacao.valor_retirada;\nconst dados = $input.first().json;\n\nlet contextoFinanceiro = \"📊 DADOS FINANCEIROS CONSOLIDADOS\\n\\n\";\n\ncontextoFinanceiro += \"=== DASHBOARD (Visão Atual) ===\\n\";\nif (dados.dashboard.caixa) {\n  contextoFinanceiro += `💰 Caixa Atual: R$ ${dados.dashboard.caixa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\nif (dados.dashboard.janeiro) {\n  contextoFinanceiro += `\\n📥 JANEIRO - Recebimentos:\\n`;\n  contextoFinanceiro += `   A Receber: R$ ${(dados.dashboard.janeiro.receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Recebido: R$ ${(dados.dashboard.janeiro.recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `\\n📤 JANEIRO - Pagamentos:\\n`;\n  contextoFinanceiro += `   A Pagar: R$ ${(dados.dashboard.janeiro.pagar || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  contextoFinanceiro += `   Já Pago: R$ ${(dados.dashboard.janeiro.pago || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n}\n\ncontextoFinanceiro += \"\\n=== FLUXO DE CAIXA (Histórico + Projeção) ===\\n\";\nif (dados.fluxoCaixa.realizado) {\n  const real = dados.fluxoCaixa.realizado;\n  if (real.saldoInicial?.Janeiro) {\n    contextoFinanceiro += `🏁 Saldo Inicial Janeiro: R$ ${real.saldoInicial.Janeiro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.entradas?.Janeiro) {\n    contextoFinanceiro += `✅ Entradas Realizadas Jan: R$ ${real.entradas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n  if (real.saidas?.Janeiro) {\n    contextoFinanceiro += `❌ Saídas Realizadas Jan: R$ ${real.saidas.Janeiro.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n  }\n}\n\nif (dados.fluxoCaixa.emAndamento) {\n  const andamento = dados.fluxoCaixa.emAndamento;\n  contextoFinanceiro += \"\\n📈 PROJEÇÕES (Próximos Meses):\\n\";\n  \n  ['Janeiro', 'Fevereiro', 'Março'].forEach(mes => {\n    if (andamento.movimentacaoTotal?.[mes]) {\n      const mov = andamento.movimentacaoTotal[mes];\n      const simbolo = mov >= 0 ? '➕' : '➖';\n      contextoFinanceiro += `   ${simbolo} ${mes}: R$ ${mov.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\\n`;\n    }\n  });\n}\n\nlet promptCEO = `Você é o CEO da Deva Cardans. Você tem acesso aos dados financeiros consolidados.\n\n🔴 REGRA DE OURO: O saldo em caixa NUNCA pode ficar abaixo de R$ 60.000,00 (margem de segurança obrigatória).\n\nTAREFA: Analise os dados e responda a pergunta de forma estratégica e objetiva.\n\nSe a pergunta envolver compras/retiradas:\n1. Verifique o saldo atual\n2. Simule o impacto (Caixa Atual - Valor Solicitado - Compromissos Pendentes)\n3. Compare com a margem de segurança de R$ 60.000,00\n4. Se o saldo final ficar abaixo de R$ 60k, ALERTE o risco\n5. Considere as projeções dos próximos meses\n6. Sempre mencione explicitamente a margem de segurança de R$ 60k na resposta`;\n\nif (ehRetirada) {\n  promptCEO += `\n\n🚨 ATENÇÃO ESPECIAL: Esta é uma pergunta sobre RETIRADA DE DINHEIRO.`;\n  if (valorRetirada > 0) {\n    promptCEO += `\nValor solicitado: R$ ${valorRetirada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;\n  }\n  promptCEO += `\n\n⚠️ REGRA CRÍTICA PARA RETIRADAS:\nSe você NEGAR ou DESACONSELHAR a retirada por risco financeiro:\n1. CALCULE e INFORME o valor máximo seguro que pode ser retirado\n2. Use a fórmula: Valor Máximo = (Caixa Atual - Contas a Pagar - Margem de Segurança 60k)\n3. Apresente de forma clara: \"✅ Valor seguro para retirada: R$ X,XXX.XX\"\n4. Explique o cálculo brevemente\n\nSempre que negar uma retirada, você DEVE sugerir um valor alternativo viável.`;\n}\n\npromptCEO += `\n\nRESPONDA EM PORTUGUÊS, de forma clara e direta.\n\n${contextoFinanceiro}\n\nPERGUNTA: ${perguntaOriginal}`;\n\nreturn {\n  json: {\n    contents: [\n      {\n        role: \"user\",\n        parts: [{ text: promptCEO }]\n      }\n    ],\n    generationConfig: {\n      temperature: 0.3,\n      maxOutputTokens: 2000\n    }\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [928, 112],
+      "position": [
+        928,
+        112
+      ],
       "id": "preparar-prompt",
       "name": "Preparar Prompt CEO"
     },
@@ -184,7 +223,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1456, 112],
+      "position": [
+        1456,
+        112
+      ],
       "id": "resultado",
       "name": "Resultado Final"
     },
@@ -208,7 +250,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
       "typeVersion": 1,
-      "position": [-1232, 112],
+      "position": [
+        -1232,
+        112
+      ],
       "id": "gemini-classifier",
       "name": "Message a model",
       "credentials": {
@@ -237,7 +282,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
       "typeVersion": 1,
-      "position": [1168, 112],
+      "position": [
+        1168,
+        112
+      ],
       "id": "gemini-ceo",
       "name": "Message a model1",
       "credentials": {
@@ -251,52 +299,174 @@
   "pinData": {},
   "connections": {
     "Manual Trigger": {
-      "main": [[{"node": "Set Pergunta", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Set Pergunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Set Pergunta": {
-      "main": [[{"node": "Montar Payload", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Montar Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Montar Payload": {
-      "main": [[{"node": "Message a model", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Classificação": {
-      "main": [[{"node": "Dropbox List", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Dropbox List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dropbox List": {
-      "main": [[{"node": "Filter Ano", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Filter Ano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filter Ano": {
-      "main": [[{"node": "Dropbox Download", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Dropbox Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dropbox Download": {
-      "main": [[
-        {"node": "Extract Dashboard", "type": "main", "index": 0},
-        {"node": "Extract Fluxo", "type": "main", "index": 0}
-      ]]
+      "main": [
+        [
+          {
+            "node": "Extract Dashboard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Fluxo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Dashboard": {
-      "main": [[{"node": "Clean Dashboard", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Clean Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Clean Dashboard": {
-      "main": [[{"node": "Combinar Dados", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Combinar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Fluxo": {
-      "main": [[{"node": "Clean Fluxo", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Clean Fluxo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Clean Fluxo": {
-      "main": [[{"node": "Combinar Dados", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Combinar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Combinar Dados": {
-      "main": [[{"node": "Preparar Prompt CEO", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt CEO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Preparar Prompt CEO": {
-      "main": [[{"node": "Message a model1", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Message a model": {
-      "main": [[{"node": "Parse Classificação", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Parse Classificação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Message a model1": {
-      "main": [[{"node": "Resultado Final", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Resultado Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
